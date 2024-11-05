@@ -1,25 +1,18 @@
 import * as nodeMailer from "nodemailer";
 import * as dotEnv from "dotenv";
 import express from "express";
+import Mail from "nodemailer/lib/mailer";
 
 dotEnv.config();
 
-interface Mail {
+interface IncomingMail {
   to: string[];
+  bcc?: string[];
   subject: string;
   text?: string;
   html?: string;
   user?: string;
   replyTo?: string[];
-}
-
-interface MailOut {
-  from: string;
-  to: string;
-  subject: string;
-  text: string;
-  html: string;
-  replyTo: string;
 }
 
 const userCooldownMap = new Map<String, number>();
@@ -42,7 +35,7 @@ const app = express();
 app.use(express.json());
 
 app.post("/send", (req, res) => {
-  const mail = req.body as Mail;
+  const mail = req.body as IncomingMail;
   console.log("Got request:", req.body);
 
   if (mail.to == null) {
@@ -61,6 +54,19 @@ app.post("/send", (req, res) => {
     res.status(400).send('"to" field must not be empty');
     console.log("Bad request");
     return;
+  }
+
+  if (mail.bcc != null) {
+    if (!Array.isArray(mail.bcc)) {
+      res.status(400).send('"bcc" field must be an array');
+      console.log("Bad request");
+      return;
+    }
+    if (mail.bcc.length === 0) {
+      res.status(400).send('"bcc" field must not be empty');
+      console.log("Bad request");
+      return;
+    }
   }
 
   if (mail.subject == null) {
@@ -101,10 +107,11 @@ app.post("/send", (req, res) => {
   const mailOut = {
     from: `"${process.env.MAIL_USERNAME}" <${process.env.MAIL_USER}>`,
     to: mail.to.join(", "),
+    bcc: mail.bcc?.join(", "),
     subject: mail.subject,
     text: mail.text,
     html: mail.html,
-  } as MailOut;
+  } as Mail.Options;
 
   if (mail.replyTo != null) {
     mailOut.replyTo = mail.replyTo.join(", ");
